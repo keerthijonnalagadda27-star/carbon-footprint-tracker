@@ -1,62 +1,83 @@
 # Carbon Footprint Tracker
 
-Serverless web app that estimates daily CO₂ from travel, electricity, and food. Live on AWS in `ap-south-1` (Mumbai).
+A serverless web application for logging daily travel, electricity, and food activity and converting each entry into kilograms of CO₂. The stack is fully managed on AWS: a static frontend on S3, a REST API on API Gateway, Python 3.12 compute on Lambda, persistence on DynamoDB, and threshold emails through SNS.
 
-**Live demo:** [S3 website](http://carbon-tracker-106834399198-ap-south-1.s3-website.ap-south-1.amazonaws.com)
+[Live application](http://carbon-tracker-106834399198-ap-south-1.s3-website.ap-south-1.amazonaws.com)
 
-## What it does
+## Features
 
-- Log travel (km), electricity (kWh), and meals
-- Convert each entry to kg CO₂ using documented emission factors
-- Dashboard for today / this week / this month, plus a last-7-days chart
-- Email alert via Amazon SNS when today’s total crosses 15 kg CO₂
+- Activity logging for travel (km), electricity (kWh), and meals
+- Instant CO₂ estimates from documented emission factors
+- Dashboard totals for today, the current week, and the current month
+- Category breakdown and a seven-day emissions chart
+- Configurable daily threshold with Amazon SNS email alerts
+- Activity history persisted in DynamoDB
 
 ## Architecture
 
-Browser → **Amazon S3** (static HTML/CSS/JS) → **API Gateway** → **AWS Lambda** (Python 3.12) → **DynamoDB**. If the daily total is over the threshold, Lambda publishes to **SNS**. **CloudWatch** watches Lambda errors. **IAM** gives Lambda only DynamoDB, SNS, and logging permission. The full stack is one **CloudFormation** / SAM template (`template.yaml`).
+```
+Browser  →  Amazon S3 (HTML, CSS, JS)
+         →  Amazon API Gateway (REST)
+         →  AWS Lambda (Python 3.12)
+         →  Amazon DynamoDB (users, activities)
+         →  Amazon SNS (threshold email)
+         →  Amazon CloudWatch (Lambda errors)
+```
+
+Infrastructure is defined in a single SAM / CloudFormation template (`template.yaml`). The Lambda execution role is limited to DynamoDB, SNS, and CloudWatch Logs. The frontend does not embed AWS credentials.
+
+## Tech stack
+
+| Layer | Services / tools |
+|---|---|
+| Frontend | HTML, CSS, JavaScript |
+| API | Amazon API Gateway |
+| Compute | AWS Lambda, Python 3.12 |
+| Data | Amazon DynamoDB |
+| Notifications | Amazon SNS |
+| Hosting | Amazon S3 static website |
+| IaC | AWS SAM, CloudFormation |
+| Observability | Amazon CloudWatch |
 
 ## Emission factors
 
-| Category | Type | Factor |
-|---|---|---|
-| Travel | Car / Bus / Train / Flight / Walk or cycle | 0.21 / 0.089 / 0.041 / 0.255 / 0.00 kg per km |
-| Electricity | Grid | 0.82 kg per kWh |
-| Food | Meat / Mixed / Vegetarian / Vegan | 3.5 / 1.7 / 0.8 / 0.5 kg per meal |
+| Category | Factor |
+|---|---|
+| Travel — car / bus / train / flight / walk or cycle | 0.21 / 0.089 / 0.041 / 0.255 / 0.00 kg CO₂ per km |
+| Electricity — grid | 0.82 kg CO₂ per kWh |
+| Food — meat / mixed / vegetarian / vegan | 3.5 / 1.7 / 0.8 / 0.5 kg CO₂ per meal |
 
-Example: 20 km car × 0.21 + 50 kWh × 0.82 + 3 veg meals × 0.80 = **47.60 kg**.
+Sample total: 20 km by car + 50 kWh + 3 vegetarian meals = **47.60 kg CO₂**.
 
-## Run locally (no AWS)
+## Repository structure
 
-Open `frontend/index.html` in a browser, or:
+```
+frontend/             Static client (S3)
+backend/handler.py    Lambda handler
+template.yaml         SAM template
+```
+
+## Local development
 
 ```bash
 cd frontend
 python -m http.server 8080
 ```
 
-Visit http://localhost:8080. With `apiUrl` empty in `frontend/js/config.js`, data stays in the browser.
+The UI is available at `http://localhost:8080`. If `apiUrl` in `frontend/js/config.js` is empty, activity data is stored in `localStorage`.
 
-## Deploy (AWS Free Tier)
+## Deployment
 
-Needs AWS CLI + SAM CLI. Do not add EC2, RDS, or NAT Gateways.
+Requires AWS CLI and AWS SAM CLI.
 
 ```bash
 sam build
 sam deploy --guided --parameter-overrides AlertEmail=you@example.com
+aws s3 sync frontend s3://<bucket-name> --delete
 ```
 
-Confirm the SNS subscription email. Then:
+Set `frontend/js/config.js` `apiUrl` to the deployed API Gateway stage URL, then sync the frontend again. Confirm the SNS subscription from the inbox used in `AlertEmail`.
 
-```bash
-aws s3 sync frontend s3://BUCKET_NAME --delete
-```
+## License
 
-Paste the API Gateway URL into `frontend/js/config.js` as `apiUrl`, and sync the frontend again.
-
-## Project layout
-
-```
-frontend/          S3 static site
-backend/handler.py  Lambda (CO₂ math, DynamoDB, SNS)
-template.yaml      IAM, Lambda, S3, DynamoDB, API Gateway, SNS, CloudWatch
-```
+Personal / academic project.
