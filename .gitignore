@@ -1,0 +1,12 @@
+.aws-sam/
+packaged.yaml
+samconfig.toml
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+Thumbs.db
+node_modules/
+docs/submission/
+docs/tomorrow/
